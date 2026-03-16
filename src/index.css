@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Bollegraaf Industrial Design System */
+    
+    /* Base colors */
+    --background: 0 0% 98%;
+    --foreground: 210 50% 15%;
+    
+    /* Bollegraaf Orange - Primary brand color */
+    --primary: 20 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 25 100% 60%;
+    
+    /* Navy Blue - Secondary brand color */
+    --secondary: 210 50% 25%;
+    --secondary-foreground: 0 0% 100%;
+    
+    /* Status colors */
+    --status-running: 200 85% 50%;
+    --status-idle: 45 95% 55%;
+    --status-maintenance: 280 60% 55%;
+    --status-error: 0 85% 60%;
+    --status-success: 140 65% 45%;
+    
+    /* UI elements */
+    --card: 0 0% 100%;
+    --card-foreground: 210 50% 15%;
+    --card-border: 210 20% 88%;
+    
+    --muted: 210 20% 95%;
+    --muted-foreground: 210 15% 45%;
+    
+    --accent: 20 100% 95%;
+    --accent-foreground: 20 100% 40%;
+    
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 210 20% 88%;
+    --input: 210 20% 90%;
+    --ring: 20 100% 50%;
+    
+    --radius: 0.75rem;
+    
+    /* Chart colors */
+    --chart-1: 20 100% 50%;
+    --chart-2: 200 85% 50%;
+    --chart-3: 140 65% 45%;
+    --chart-4: 280 60% 55%;
+    --chart-5: 45 95% 55%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(20 100% 50%), hsl(25 100% 60%));
+    --gradient-status: linear-gradient(90deg, hsl(200 85% 50%), hsl(210 80% 55%));
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(210 20% 15% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(210 20% 15% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(210 20% 15% / 0.1);
+    --shadow-glow: 0 0 20px hsl(20 100% 50% / 0.3);
+  }
+
+  .dark {
+    --background: 210 50% 8%;
+    --foreground: 0 0% 95%;
+    
+    --primary: 20 100% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 25 100% 65%;
+    
+    --secondary: 210 50% 30%;
+    --secondary-foreground: 0 0% 100%;
+    
+    --card: 210 45% 12%;
+    --card-foreground: 0 0% 95%;
+    --card-border: 210 30% 20%;
+    
+    --muted: 210 40% 15%;
+    --muted-foreground: 210 15% 60%;
+    
+    --accent: 20 100% 20%;
+    --accent-foreground: 20 100% 60%;
+    
+    --border: 210 30% 20%;
+    --input: 210 35% 18%;
+    
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.4);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.5);
+    --shadow-glow: 0 0 30px hsl(20 100% 50% / 0.4);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
