@@ -1,21 +1,31 @@
-version: "3.8"
+version: "2.4"
 
 services:
   dashboard:
-    build:
-      context: .
-      args:
-        VITE_API_URL: http://localhost:3001/api
-    ports:
-      - "3000:3000"   # Frontend
-      - "3001:3001"   # Backend API
+    image: "bollegraaf-insight-panel:1.1.2"
+    container_name: dashboard
+    restart: always
     environment:
-      - DB_HOST=host.gateway.docker.internal  # Access host MySQL from container
-      - DB_PORT=59972
-      - DB_USER=root
-      - DB_PASSWORD=secret
-      - DB_NAME=BalerDB
-      - API_PORT=3001
-    extra_hosts:
-      - "host.gateway.docker.internal:host-gateway"
-    restart: unless-stopped
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: db_user
+      DB_PASSWORD: db_password
+      DB_NAME: BalerDB
+      API_PORT: 3001
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    mem_limit: 350m
+    mem_reservation: 250m
+    networks:
+      - proxy-redirect
+    volumes:
+      - dashboard-data:/data
+
+volumes:
+  dashboard-data:
+
+networks:
+  proxy-redirect:
+    external: true
+    name: proxy-redirect
