@@ -2,12 +2,13 @@ version: "2.4"
 
 services:
   dashboard:
+    build: .
     image: "bollegraaf-insight-panel:1.1.2"
     container_name: dashboard
     restart: always
     environment:
-      DB_HOST: db
-      DB_PORT: 3306
+      DB_HOST: 192.168.1.1
+      DB_PORT: 59972
       DB_USER: db_user
       DB_PASSWORD: db_password
       DB_NAME: BalerDB
