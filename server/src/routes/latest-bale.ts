@@ -6,10 +6,10 @@ const latestBaleRouter = Router();
 latestBaleRouter.get("/", async (_req, res) => {
   try {
     const [rows]: any = await pool.query(`
-      SELECT *
-      FROM bale_cycle
+      SELECT *, timestamp as ts, id as raw_id
+      FROM BaleData
       WHERE bale_number IS NOT NULL
-      ORDER BY ts DESC, id DESC
+      ORDER BY timestamp DESC, id DESC
       LIMIT 1
     `);
 

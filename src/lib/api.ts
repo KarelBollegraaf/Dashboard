@@ -9,7 +9,7 @@ import type {
   ParsedPressure,
 } from "@/types/database";
 
-const API_BASE = "http://10.31.3.27:3001/api";
+const API_BASE = "http://localhost:3001/api";
   
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {

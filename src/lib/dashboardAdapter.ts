@@ -59,7 +59,7 @@ export function adaptOverview(data: OverviewApi | null | undefined) {
           valveRr2: Number(latest.valve_rr2 ?? 0),
           valveCh: Number(latest.valve_ch ?? 0),
           valveMes: Number(latest.valve_mes ?? 0),
-          rawId: Number(latest.raw_id ?? 0),
+          rawId: Number(latest.raw_id ?? latest.id ?? 0),
         }
       : null,
 
@@ -128,7 +128,7 @@ export function adaptOverview(data: OverviewApi | null | undefined) {
       oilLevel: Number(b.oil_level ?? 0),
       knotsVertical: Number(b.knots_vertical ?? 0),
       customerNumber: Number(b.customer_number ?? 0),
-      rawId: Number(b.raw_id ?? 0),
+      rawId: Number(b.raw_id ?? b.id ?? 0),
     })),
 
     timeline: {

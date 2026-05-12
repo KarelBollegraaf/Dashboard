@@ -26,50 +26,73 @@ function cleanTrailingZeros(values: number[]): number[] {
   return cleaned;
 }
 
-pressureRouter.get("/:rawId", async (req, res) => {
+function calcStats(arr: number[]) {
+  const nonZero = arr.filter((v) => v > 0);
+  return {
+    min: nonZero.length ? +Math.min(...nonZero).toFixed(2) : 0,
+    max: nonZero.length ? +Math.max(...nonZero).toFixed(2) : 0,
+    avg: nonZero.length
+      ? +(nonZero.reduce((a, b) => a + b, 0) / nonZero.length).toFixed(2)
+      : 0,
+    count: nonZero.length,
+  };
+}
+
+function toNumberArray(value: any): number[] {
+  if (Array.isArray(value)) return value.map(Number);
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(Number);
+    } catch {
+      const n = Number(value);
+      return Number.isFinite(n) ? [n] : [];
+    }
+  }
+
+  const n = Number(value);
+  return Number.isFinite(n) ? [n] : [];
+}
+
+pressureRouter.get("/:baleId", async (req, res) => {
   try {
     const [rows]: any = await pool.query(
-      `SELECT payload_text FROM mqtt_raw WHERE id = ?`,
-      [req.params.rawId]
+      `
+      SELECT *
+      FROM ChannelPressure
+      WHERE bale_id = ?
+      ORDER BY id ASC
+      `,
+      [req.params.baleId]
     );
 
-    if (!rows.length) {
-      return res.status(404).json({ error: "Raw message not found" });
-    }
+    const parsedPressure = rows.map((p: any) => {
+      const part = Number(p.part ?? p.part_number ?? 1);
+      const direction =
+        p.direction === null || p.direction === undefined
+          ? null
+          : Number(p.direction);
 
-    let payload: any;
-    try {
-      payload = JSON.parse(rows[0].payload_text);
-    } catch {
-      return res.status(400).json({ error: "Payload is not valid JSON" });
-    }
+      const partName = PART_NAMES[part] || `Part${part}`;
+      const dirName = direction
+        ? DIRECTION_NAMES[direction] || `Dir${direction}`
+        : null;
 
-    if (!payload.pressure || !Array.isArray(payload.pressure)) {
-      return res.json({ pressure: [], message: "No pressure data in this message" });
-    }
-
-    const parsedPressure = payload.pressure.map((p: any) => {
-      const partName = PART_NAMES[p.part] || `Part${p.part}`;
-      const dirName = p.direction ? (DIRECTION_NAMES[p.direction] || `Dir${p.direction}`) : null;
       const label = dirName ? `${partName} ${dirName}` : partName;
 
-      const highPressure = Array.isArray(p.high_pressure) ? cleanTrailingZeros(p.high_pressure) : [];
-      const channelPressure = Array.isArray(p.channel_pressure) ? cleanTrailingZeros(p.channel_pressure) : [];
+      const highPressure = cleanTrailingZeros(
+        toNumberArray(p.high_pressure ?? p.highPressure ?? p.hp ?? [])
+      );
 
-      const calcStats = (arr: number[]) => {
-        const nonZero = arr.filter(v => v > 0);
-        return {
-          min: nonZero.length ? +Math.min(...nonZero).toFixed(2) : 0,
-          max: nonZero.length ? +Math.max(...nonZero).toFixed(2) : 0,
-          avg: nonZero.length ? +(nonZero.reduce((a, b) => a + b, 0) / nonZero.length).toFixed(2) : 0,
-          count: nonZero.length,
-        };
-      };
+      const channelPressure = cleanTrailingZeros(
+        toNumberArray(p.channel_pressure ?? p.channelPressure ?? p.pressure ?? [])
+      );
 
       return {
-        part: p.part,
-        direction: p.direction,
-        offset: p.offset,
+        part,
+        direction,
+        offset: Number(p.offset ?? 0),
         partName,
         directionName: dirName,
         label,
