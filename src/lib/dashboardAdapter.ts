@@ -3,12 +3,23 @@ type OverviewApi = {
   stats?: any;
   materials?: any[];
   recent24h?: number;
+  filters?: {
+    materials?: string[];
+    recipes?: number[];
+  };
+  baleOptions?: any[];
+  timeline?: {
+    bucket?: string;
+    rows?: any[];
+  };
 };
 
 export function adaptOverview(data: OverviewApi | null | undefined) {
   const latest = data?.latest ?? null;
   const stats = data?.stats ?? null;
-  const materials = Array.isArray(data?.materials) ? data!.materials : [];
+  const materials = Array.isArray(data?.materials) ? data.materials : [];
+  const baleOptions = Array.isArray(data?.baleOptions) ? data.baleOptions : [];
+  const timelineRows = Array.isArray(data?.timeline?.rows) ? data.timeline?.rows : [];
 
   return {
     latest: latest
@@ -72,32 +83,61 @@ export function adaptOverview(data: OverviewApi | null | undefined) {
       .map((m) => ({
         materialName: m.material_name ?? "Unknown",
         count: Number(m.count ?? 0),
-
         avgWeight: Number(m.avg_weight ?? 0),
         totalWeight: Number(m.total_weight ?? 0),
-
         avgLength: Number(m.avg_length ?? 0),
         totalLength: Number(m.total_length ?? 0),
-
         avgKwh: Number(m.avg_kwh ?? 0),
         totalKwh: Number(m.total_kwh ?? 0),
-
         avgTotalTime: Number(m.avg_total_time ?? 0),
         totalTotalTime: Number(m.total_total_time ?? 0),
-
         avgAutoTime: Number(m.avg_auto_time ?? 0),
         totalAutoTime: Number(m.total_auto_time ?? 0),
-
         avgStandbyTime: Number(m.avg_standby_time ?? 0),
         totalStandbyTime: Number(m.total_standby_time ?? 0),
-
         avgEmptyTime: Number(m.avg_empty_time ?? 0),
         totalEmptyTime: Number(m.total_empty_time ?? 0),
-
         avgRamForwards: Number(m.avg_ram_forwards ?? 0),
         totalRamForwards: Number(m.total_ram_forwards ?? 0),
-
         operators: m.operators ?? "—",
       })),
+
+    filters: {
+      materials: Array.isArray(data?.filters?.materials) ? data!.filters!.materials! : [],
+      recipes: Array.isArray(data?.filters?.recipes)
+        ? data!.filters!.recipes!.map((r: any) => Number(r))
+        : [],
+    },
+
+    baleOptions: baleOptions.map((b: any) => ({
+      id: Number(b.id ?? 0),
+      ts: b.ts ?? "",
+      baleNumber: Number(b.bale_number ?? 0),
+      recipeNumber: Number(b.recipe_number ?? 0),
+      materialName: b.material_name ?? "Unknown",
+      shiftNumber: Number(b.shift_number ?? 0),
+      weight: Number(b.weight ?? 0),
+      volume: Number(b.volume ?? 0),
+      baleLength: Number(b.bale_length ?? 0),
+      totalTime: Number(b.total_time ?? 0),
+      autoTime: Number(b.auto_time ?? 0),
+      standbyTime: Number(b.standby_time ?? 0),
+      emptyTime: Number(b.empty_time ?? 0),
+      kwhUsed: Number(b.kwh_used ?? 0),
+      oilTemperature: Number(b.oil_temperature ?? 0),
+      oilLevel: Number(b.oil_level ?? 0),
+      knotsVertical: Number(b.knots_vertical ?? 0),
+      customerNumber: Number(b.customer_number ?? 0),
+      rawId: Number(b.raw_id ?? 0),
+    })),
+
+    timeline: {
+      bucket: data?.timeline?.bucket ?? "day",
+      rows: timelineRows.map((r: any) => ({
+        bucket: r.bucket ?? "",
+        materialName: r.material_name ?? "Unknown",
+        baleCount: Number(r.bale_count ?? 0),
+      })),
+    },
   };
 }

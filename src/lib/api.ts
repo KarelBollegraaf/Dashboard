@@ -9,8 +9,8 @@ import type {
   ParsedPressure,
 } from "@/types/database";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
-
+const API_BASE = "http://10.31.3.27:3001/api";
+  
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
     cache: "no-store",
@@ -33,10 +33,24 @@ export function fetchOverview(): Promise<OverviewData> {
   return fetchJson("/overview");
 }
 
-export function fetchOverviewWithRange(from: string, to: string): Promise<OverviewData> {
+export function fetchOverviewWithRange(params: {
+  from: string;
+  to: string;
+  materials?: string[];
+  recipes?: number[];
+}): Promise<OverviewData> {
   const sp = new URLSearchParams();
-  sp.set("from", from);
-  sp.set("to", to);
+  sp.set("from", params.from);
+  sp.set("to", params.to);
+
+  if (params.materials && params.materials.length > 0) {
+    sp.set("materials", params.materials.join(","));
+  }
+
+  if (params.recipes && params.recipes.length > 0) {
+    sp.set("recipes", params.recipes.join(","));
+  }
+
   return fetchJson(`/overview?${sp.toString()}`);
 }
 
