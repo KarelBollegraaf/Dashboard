@@ -13,6 +13,7 @@ import PressurePage from "./pages/PressurePage";
 import EventsPage from "./pages/EventsPage";
 import RawInspectorPage from "./pages/RawInspectorPage";
 import NotFound from "./pages/NotFound";
+import QualityRulesPage from "./pages/QualityRulesPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/pressure" element={<PressurePage />} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/raw" element={<RawInspectorPage />} />
+            <Route path="/quality" element={<QualityRulesPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

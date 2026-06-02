@@ -1,7 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { adaptOverview } from "@/lib/dashboardAdapter";
-import { fetchCycles, fetchOverviewWithRange, fetchPressure } from "@/lib/api";
+import {
+  fetchBales,
+  fetchCycles,
+  fetchOverviewWithRange,
+  fetchPressure,
+} from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import {
   Package,
@@ -14,6 +19,11 @@ import {
   Weight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  calculateBaleQuality,
+  getQualityBadgeClass,
+  summarizeBaleQuality,
+} from "@/lib/baleQuality";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -197,6 +207,18 @@ function ComparisonTable({
   );
 }
 
+function QualityBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getQualityBadgeClass(
+        status as any
+      )}`}
+    >
+      {status}
+    </span>
+  );
+}
+
 const Index = () => {
   const [preset, setPreset] = useState("last7d");
   const [from, setFrom] = useState("");
@@ -255,6 +277,44 @@ const Index = () => {
   const recent24h = overview.stats.recent24h;
   const baleOptions = overview.baleOptions ?? [];
 
+  const qualityBalesQuery = useQuery({
+    queryKey: [
+      "quality-bales",
+      range.from,
+      range.to,
+      selectedMaterials,
+      selectedRecipes,
+    ],
+    queryFn: () =>
+      fetchBales({
+        page: 1,
+        limit: 5000,
+        sort: "ts",
+        order: "DESC",
+        from: range.from,
+        to: range.to,
+        material:
+          selectedMaterials.length === 1 ? selectedMaterials[0] : undefined,
+      }),
+    refetchInterval: 10000,
+    retry: 1,
+  });
+
+  const qualityBalesRaw = qualityBalesQuery.data?.data ?? [];
+
+  const qualityBales = qualityBalesRaw.filter((b: any) => {
+    const materialName = b.material_name ?? b.materialName;
+    const recipeNumber = Number(b.recipe_number ?? b.recipeNumber ?? 0);
+
+    const materialOk =
+      selectedMaterials.length === 0 || selectedMaterials.includes(materialName);
+
+    const recipeOk =
+      selectedRecipes.length === 0 || selectedRecipes.includes(recipeNumber);
+
+    return materialOk && recipeOk;
+  });
+
   const latestOnly =
     baleOptions.find((b: any) => b.id === selectedBaleId) ??
     baleOptions[0] ??
@@ -301,6 +361,42 @@ const Index = () => {
     const vals = nonZeroValues(item?.channelPressure);
     return vals.length ? Math.max(max, Math.max(...vals)) : max;
   }, 0);
+
+  const latestQuality = latestOnly
+    ? calculateBaleQuality({
+        materialName: latestOnly.materialName,
+        baleNumber: latestOnly.baleNumber,
+        weight: latestOnly.weight,
+        volume: latestOnly.volume,
+        baleLength: latestOnly.baleLength,
+        totalTime: latestOnly.totalTime,
+        autoTime: latestOnly.autoTime,
+        kwhUsed: latestOnly.kwhUsed,
+        ramStrokes: totalRamStrokes,
+        maxHighPressure,
+        maxChannelPressure,
+      })
+    : null;
+
+  const qualitySummary = summarizeBaleQuality(
+    qualityBales.map((b: any) => ({
+      materialName: b.material_name ?? b.materialName,
+      baleNumber: b.bale_number ?? b.baleNumber,
+      weight: b.weight,
+      volume: b.volume,
+      baleLength: b.bale_length ?? b.baleLength,
+      totalTime: b.total_time ?? b.totalTime,
+      autoTime: b.auto_time ?? b.autoTime,
+      kwhUsed: b.kwh_used ?? b.kwhUsed,
+    }))
+  );
+
+const qualityTotal = qualityBales.length;
+
+  const qualityGoodPercent =
+    qualityTotal > 0
+      ? Math.round(((qualitySummary.GOOD + qualitySummary.OK) / qualityTotal) * 100)
+      : 0;
 
   const timelineRows = overview.timeline?.rows ?? [];
   const timelineMap = new Map<string, any>();
@@ -349,7 +445,11 @@ const Index = () => {
   const summaryCards =
     latestOnly && materialSummary
       ? [
-          { label: "Latest Bale", value: `#${latestOnly.baleNumber}` },
+          {
+            label: "Latest Bale",
+            value: `#${latestOnly.baleNumber}`,
+            quality: latestQuality?.status ?? "UNKNOWN",
+          },
           { label: "Material", value: latestOnly.materialName },
           { label: "Bales Selected", value: `${materialSummary.count}` },
           { label: "Recipe", value: `${latestOnly.recipeNumber}` },
@@ -490,10 +590,16 @@ const Index = () => {
           {latestOnly?.customerNumber || "Baler"} —{" "}
           {latestOnly?.materialName || "No data"}
         </h1>
-        <p className="text-muted-foreground mt-1">
-          Latest bale #{latestOnly?.baleNumber ?? 0} ·{" "}
-          {latestOnly?.ts ? new Date(latestOnly.ts).toLocaleString() : "—"}
-        </p>
+        <div className="flex flex-wrap items-center gap-2 text-muted-foreground mt-1">
+          <span>
+            Latest bale #{latestOnly?.baleNumber ?? 0} ·{" "}
+            {latestOnly?.ts ? new Date(latestOnly.ts).toLocaleString() : "—"}
+          </span>
+          {latestQuality && <QualityBadge status={latestQuality.status} />}
+          {latestQuality && (
+            <span className="text-xs">Score {latestQuality.score}/100</span>
+          )}
+        </div>
       </div>
 
       <Card className="p-4">
@@ -646,6 +752,99 @@ const Index = () => {
         />
       </div>
 
+      <Card className="p-5 border-2 border-card-border">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <h3 className="text-xl font-bold text-foreground">Bale Quality</h3>
+              {latestQuality && <QualityBadge status={latestQuality.status} />}
+            </div>
+
+            <p className="text-sm text-muted-foreground mt-1">
+              Based on weight, length, density and total time.
+            </p>
+          </div>
+
+          <div className="text-right">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              GOOD + OK
+            </div>
+            <div className="text-4xl font-bold text-foreground">
+              {qualityGoodPercent}%
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {qualityTotal} scored / {stats.totalBales} selected
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_360px] mt-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-green-300 bg-green-50 p-4">
+              <div className="text-xs font-semibold text-green-700">GOOD</div>
+              <div className="mt-2 text-3xl font-bold text-green-950">
+                {qualitySummary.GOOD}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-blue-300 bg-blue-50 p-4">
+              <div className="text-xs font-semibold text-blue-700">OK</div>
+              <div className="mt-2 text-3xl font-bold text-blue-950">
+                {qualitySummary.OK}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-orange-300 bg-orange-50 p-4">
+              <div className="text-xs font-semibold text-orange-700">WARNING</div>
+              <div className="mt-2 text-3xl font-bold text-orange-950">
+                {qualitySummary.WARNING}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
+              <div className="text-xs font-semibold text-slate-600">UNKNOWN</div>
+              <div className="mt-2 text-3xl font-bold text-slate-900">
+                {qualitySummary.UNKNOWN}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm text-muted-foreground">Latest bale</div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-2xl font-bold">
+                    #{latestOnly?.baleNumber ?? "—"}
+                  </span>
+                  {latestQuality && <QualityBadge status={latestQuality.status} />}
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">Score</div>
+                <div className="text-2xl font-bold">
+                  {latestQuality ? `${latestQuality.score}/100` : "—"}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 border-t pt-3">
+              <div className="text-sm font-medium">Notes</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                {latestQuality && latestQuality.reasons.length > 0
+                  ? latestQuality.reasons.join(", ")
+                  : "No quality warnings for the latest bale."}
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-muted-foreground">
+              Change limits on the Quality Rules page.
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {latestOnly && materialSummary && (
         <div className="space-y-4">
           <div>
@@ -659,7 +858,10 @@ const Index = () => {
             {summaryCards.map((card) => (
               <Card key={card.label} className="p-4">
                 <div className="text-sm text-muted-foreground">{card.label}</div>
-                <div className="text-2xl font-bold mt-2">{card.value}</div>
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="text-2xl font-bold">{card.value}</div>
+                  {"quality" in card && <QualityBadge status={String(card.quality)} />}
+                </div>
               </Card>
             ))}
           </div>

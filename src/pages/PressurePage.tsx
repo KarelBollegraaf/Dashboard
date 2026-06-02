@@ -13,7 +13,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   ResponsiveContainer,
   ComposedChart,
-  Bar,
   Line,
   XAxis,
   YAxis,
@@ -74,18 +73,15 @@ type PressureRecord = {
   channelCount: number;
 };
 
-type PressureGroup = {
+type MovementGroup = {
   label: string;
   records: PressureRecord[];
-  highValues: number[];
-  channelValues: number[];
   highMax: number;
   highAvg: number;
   channelMax: number;
   channelAvg: number;
-  highCount: number;
-  channelCount: number;
   balesWithData: number;
+  events: number;
 };
 
 type MaterialGroup = {
@@ -96,6 +92,7 @@ type MaterialGroup = {
   channelMax: number;
   channelAvg: number;
   balesWithData: number;
+  events: number;
 };
 
 function getMotionOrder(label: string) {
@@ -106,13 +103,25 @@ function getMotionOrder(label: string) {
   return index === -1 ? 999 : index;
 }
 
-function sortMotionLabels(a: { label: string }, b: { label: string }) {
+function sortByTimeAndMovement(a: PressureRecord, b: PressureRecord) {
+  const timeA = new Date(a.ts).getTime();
+  const timeB = new Date(b.ts).getTime();
+
+  if (timeA !== timeB) return timeA - timeB;
+
   const orderA = getMotionOrder(a.label);
   const orderB = getMotionOrder(b.label);
 
-  if (orderA !== orderB) {
-    return orderA - orderB;
-  }
+  if (orderA !== orderB) return orderA - orderB;
+
+  return a.label.localeCompare(b.label);
+}
+
+function sortMovementLabels(a: { label: string }, b: { label: string }) {
+  const orderA = getMotionOrder(a.label);
+  const orderB = getMotionOrder(b.label);
+
+  if (orderA !== orderB) return orderA - orderB;
 
   return a.label.localeCompare(b.label);
 }
@@ -187,10 +196,10 @@ function buildRecords(
     }
   }
 
-  return records;
+  return records.sort(sortByTimeAndMovement);
 }
 
-function buildPressureGroups(records: PressureRecord[]): PressureGroup[] {
+function buildMovementGroups(records: PressureRecord[]): MovementGroup[] {
   const grouped = new Map<string, PressureRecord[]>();
 
   for (const record of records) {
@@ -208,22 +217,16 @@ function buildPressureGroups(records: PressureRecord[]): PressureGroup[] {
 
       return {
         label,
-        records: groupRecords.sort(
-          (a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime()
-        ),
-        highValues,
-        channelValues,
+        records: groupRecords,
         highMax: maxValue(highValues),
         highAvg: average(highValues),
         channelMax: maxValue(channelValues),
         channelAvg: average(channelValues),
-        highCount: highValues.length,
-        channelCount: channelValues.length,
         balesWithData: new Set(groupRecords.map((record) => record.baleId)).size,
+        events: groupRecords.length,
       };
     })
-    .filter((group) => group.highCount > 0 || group.channelCount > 0)
-    .sort(sortMotionLabels);
+    .sort(sortMovementLabels);
 }
 
 function buildMaterialGroups(records: PressureRecord[]): MaterialGroup[] {
@@ -250,6 +253,7 @@ function buildMaterialGroups(records: PressureRecord[]): MaterialGroup[] {
         channelMax: maxValue(channelValues),
         channelAvg: average(channelValues),
         balesWithData: new Set(groupRecords.map((record) => record.baleId)).size,
+        events: groupRecords.length,
       };
     })
     .sort((a, b) => b.channelMax - a.channelMax);
@@ -279,7 +283,6 @@ function MetricCard({
 
 export default function PressurePage() {
   const [timeframeHours, setTimeframeHours] = useState("1");
-  const [selectedMovement, setSelectedMovement] = useState("");
   const [selectedMaterial, setSelectedMaterial] = useState("all");
 
   const hours = Number(timeframeHours);
@@ -287,31 +290,37 @@ export default function PressurePage() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: [
-      "pressure-overview",
+      "pressure-total-overview",
       timeframeHours,
       selectedMaterial,
       range.from,
       range.to,
     ],
     queryFn: async () => {
-      const balesData = await fetchBales({
+      const allBalesData = await fetchBales({
         page: 1,
         limit: 300,
         sort: "ts",
         order: "DESC",
         from: range.from,
         to: range.to,
-        material: selectedMaterial === "all" ? undefined : selectedMaterial,
       });
 
-      const bales: BaleRow[] = Array.isArray(balesData?.data)
-        ? balesData.data
+      const allBales: BaleRow[] = Array.isArray(allBalesData?.data)
+        ? allBalesData.data
         : [];
+
+      const filteredBales =
+        selectedMaterial === "all"
+          ? allBales
+          : allBales.filter(
+              (bale) => (bale.material_name ?? "Unknown") === selectedMaterial
+            );
 
       const pressureByRawId = new Map<number, PressureApiItem[]>();
 
       await Promise.all(
-        bales.map(async (bale) => {
+        filteredBales.map(async (bale) => {
           const rawId = Number(bale.raw_id ?? bale.id ?? 0);
 
           if (!rawId) {
@@ -332,17 +341,17 @@ export default function PressurePage() {
         })
       );
 
-      const records = buildRecords(bales, pressureByRawId);
-      const pressureGroups = buildPressureGroups(records);
+      const records = buildRecords(filteredBales, pressureByRawId);
+      const movementGroups = buildMovementGroups(records);
       const materialGroups = buildMaterialGroups(records);
       const materials = Array.from(
-        new Set(bales.map((bale) => bale.material_name ?? "Unknown"))
+        new Set(allBales.map((bale) => bale.material_name ?? "Unknown"))
       ).sort();
 
       return {
-        bales,
+        bales: filteredBales,
         records,
-        pressureGroups,
+        movementGroups,
         materialGroups,
         materials,
       };
@@ -353,41 +362,28 @@ export default function PressurePage() {
 
   const bales = data?.bales ?? [];
   const records = data?.records ?? [];
-  const pressureGroups = data?.pressureGroups ?? [];
+  const movementGroups = data?.movementGroups ?? [];
   const materialGroups = data?.materialGroups ?? [];
   const materials = data?.materials ?? [];
 
-  const activeGroup =
-    pressureGroups.find((group) => group.label === selectedMovement) ??
-    pressureGroups[0];
+  const highValues = records.flatMap((record) => record.highPressure);
+  const channelValues = records.flatMap((record) => record.channelPressure);
 
-  const activeLabel = activeGroup?.label ?? "";
+  const highAvg = average(highValues);
+  const highMax = maxValue(highValues);
+  const channelAvg = average(channelValues);
+  const channelMax = maxValue(channelValues);
 
-  const trendData =
-    activeGroup?.records.map((record) => ({
-      bale: `#${record.baleNumber}`,
-      baleNumber: record.baleNumber,
-      timestamp: record.ts ? new Date(record.ts).toLocaleString() : "—",
-      material: record.materialName,
-      recipe: record.recipeNumber,
-
-      highMax: record.highCount > 0 ? record.highMax : null,
-      highAvg: record.highCount > 0 ? Math.round(record.highAvg) : null,
-
-      channelMax: record.channelCount > 0 ? record.channelMax : null,
-      channelAvg: record.channelCount > 0 ? Math.round(record.channelAvg) : null,
-
-      highCount: record.highCount,
-      channelCount: record.channelCount,
-    })) ?? [];
-
-  const movementOverviewData = pressureGroups.map((group) => ({
-    label: group.label,
-    highMax: group.highMax || null,
-    highAvg: group.highCount > 0 ? Math.round(group.highAvg) : null,
-    channelMax: group.channelMax || null,
-    channelAvg: group.channelCount > 0 ? Math.round(group.channelAvg) : null,
-    bales: group.balesWithData,
+  const pressureTimelineData = records.map((record, index) => ({
+    index: index + 1,
+    label: `#${record.baleNumber}`,
+    baleNumber: record.baleNumber,
+    movement: record.label,
+    timestamp: record.ts ? new Date(record.ts).toLocaleString() : "—",
+    material: record.materialName,
+    recipe: record.recipeNumber,
+    highMax: record.highCount > 0 ? record.highMax : null,
+    channelMax: record.channelCount > 0 ? record.channelMax : null,
   }));
 
   const highestRecord = [...records].sort(
@@ -421,13 +417,7 @@ export default function PressurePage() {
             <label className="text-xs text-muted-foreground mb-1 block">
               Material
             </label>
-            <Select
-              value={selectedMaterial}
-              onValueChange={(value) => {
-                setSelectedMaterial(value);
-                setSelectedMovement("");
-              }}
-            >
+            <Select value={selectedMaterial} onValueChange={setSelectedMaterial}>
               <SelectTrigger className="w-[200px] bg-background">
                 <SelectValue placeholder="Material" />
               </SelectTrigger>
@@ -442,30 +432,8 @@ export default function PressurePage() {
             </Select>
           </div>
 
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">
-              Movement
-            </label>
-            <Select
-              value={activeLabel}
-              onValueChange={setSelectedMovement}
-              disabled={pressureGroups.length === 0}
-            >
-              <SelectTrigger className="w-[260px] bg-background">
-                <SelectValue placeholder="Select movement" />
-              </SelectTrigger>
-              <SelectContent className="z-[9999] bg-background border border-border shadow-xl">
-                {pressureGroups.map((group) => (
-                  <SelectItem key={group.label} value={group.label}>
-                    {group.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="text-sm text-muted-foreground">
-            Showing pressure from{" "}
+            Showing all pressure events from{" "}
             <span className="font-medium text-foreground">
               {new Date(range.from).toLocaleString()}
             </span>{" "}
@@ -481,6 +449,7 @@ export default function PressurePage() {
         <div className="space-y-4">
           <Skeleton className="h-28 rounded-xl" />
           <Skeleton className="h-96 rounded-xl" />
+          <Skeleton className="h-80 rounded-xl" />
         </div>
       )}
 
@@ -499,13 +468,13 @@ export default function PressurePage() {
               icon={Package}
             />
             <MetricCard
-              title="Pressure Records"
+              title="Pressure Events"
               value={records.length}
               icon={Activity}
             />
             <MetricCard
-              title="Selected Channel Max"
-              value={activeGroup ? formatWhole(activeGroup.channelMax) : "—"}
+              title="Channel Pressure Max"
+              value={formatWhole(channelMax)}
               icon={Gauge}
             />
             <MetricCard
@@ -521,7 +490,7 @@ export default function PressurePage() {
             />
           </div>
 
-          {pressureGroups.length === 0 ? (
+          {records.length === 0 ? (
             <Card className="p-6 text-center text-muted-foreground">
               No pressure data found in the selected timeframe.
             </Card>
@@ -530,25 +499,58 @@ export default function PressurePage() {
               <Card className="p-6 border-2 border-card-border">
                 <div className="mb-4">
                   <h3 className="text-lg font-semibold text-foreground">
-                    Pressure Overview by Movement
+                    Total Pressure Timeline
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Red is high pressure. Blue is channel pressure. Lines stop
-                    when there is no data and continue when the next value exists.
+                    This graph shows all movements in one pressure timeline. Red
+                    is high pressure. Blue is channel pressure. Hover a point to
+                    see which movement caused the pressure.
                   </p>
                 </div>
 
-                <ResponsiveContainer width="100%" height={380}>
-                  <ComposedChart data={movementOverviewData}>
+                <div className="grid gap-4 md:grid-cols-4 mb-6">
+                  <Card className="p-4 bg-muted/30">
+                    <p className="text-xs text-muted-foreground">
+                      High Pressure Avg
+                    </p>
+                    <p className="text-xl font-bold text-foreground">
+                      {formatWhole(highAvg)}
+                    </p>
+                  </Card>
+                  <Card className="p-4 bg-muted/30">
+                    <p className="text-xs text-muted-foreground">
+                      High Pressure Max
+                    </p>
+                    <p className="text-xl font-bold text-foreground">
+                      {formatWhole(highMax)}
+                    </p>
+                  </Card>
+                  <Card className="p-4 bg-muted/30">
+                    <p className="text-xs text-muted-foreground">
+                      Channel Pressure Avg
+                    </p>
+                    <p className="text-xl font-bold text-foreground">
+                      {formatWhole(channelAvg)}
+                    </p>
+                  </Card>
+                  <Card className="p-4 bg-muted/30">
+                    <p className="text-xs text-muted-foreground">
+                      Channel Pressure Max
+                    </p>
+                    <p className="text-xl font-bold text-foreground">
+                      {formatWhole(channelMax)}
+                    </p>
+                  </Card>
+                </div>
+
+                <ResponsiveContainer width="100%" height={460}>
+                  <ComposedChart data={pressureTimelineData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis
                       dataKey="label"
                       stroke="hsl(var(--muted-foreground))"
                       fontSize={11}
-                      interval={0}
-                      angle={-20}
-                      textAnchor="end"
-                      height={80}
+                      interval="preserveStartEnd"
                     />
                     <YAxis
                       stroke="hsl(var(--muted-foreground))"
@@ -564,6 +566,38 @@ export default function PressurePage() {
                         background: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
                         borderRadius: "8px",
+                      }}
+                      formatter={(value: any, name: any) => {
+                        if (value === null || value === undefined) {
+                          return ["No data", name];
+                        }
+
+                        return [formatWhole(Number(value)), name];
+                      }}
+                      labelFormatter={(_, payload: any[]) => {
+                        const item = payload?.[0]?.payload;
+
+                        if (!item) return "";
+
+                        return `Bale #${item.baleNumber} · ${item.movement} · ${item.timestamp} · ${item.material} · Recipe ${item.recipe}`;
+                      }}
+                    />
+                    <ReferenceLine
+                      y={Math.round(highAvg)}
+                      stroke={HIGH_PRESSURE_COLOR}
+                      strokeDasharray="6 6"
+                      label={{
+                        value: "High avg",
+                        position: "insideTopRight",
+                      }}
+                    />
+                    <ReferenceLine
+                      y={Math.round(channelAvg)}
+                      stroke={CHANNEL_PRESSURE_COLOR}
+                      strokeDasharray="6 6"
+                      label={{
+                        value: "Channel avg",
+                        position: "insideBottomRight",
                       }}
                     />
                     <Line
@@ -588,137 +622,75 @@ export default function PressurePage() {
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
+
+                <div className="mt-4 text-sm text-muted-foreground">
+                  A spike means one movement in that bale created higher pressure.
+                  Hover the point to see exactly which movement it was.
+                </div>
               </Card>
 
-              {activeGroup && (
-                <Card className="p-6 border-2 border-card-border">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-foreground">
-                      {activeGroup.label} Pressure Trend per Bale
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      Two lines: red is high pressure, blue is channel pressure.
-                      If a value is missing for a bale, the line stops and starts
-                      again at the next available datapoint.
-                    </p>
-                  </div>
+              <Card className="p-6 border-2 border-card-border">
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                  Pressure by Movement
+                </h3>
 
-                  <div className="grid gap-4 md:grid-cols-4 mb-6">
-                    <Card className="p-4 bg-muted/30">
-                      <p className="text-xs text-muted-foreground">
-                        High Pressure Avg
-                      </p>
-                      <p className="text-xl font-bold text-foreground">
-                        {formatWhole(activeGroup.highAvg)}
-                      </p>
-                    </Card>
-                    <Card className="p-4 bg-muted/30">
-                      <p className="text-xs text-muted-foreground">
-                        High Pressure Max
-                      </p>
-                      <p className="text-xl font-bold text-foreground">
-                        {formatWhole(activeGroup.highMax)}
-                      </p>
-                    </Card>
-                    <Card className="p-4 bg-muted/30">
-                      <p className="text-xs text-muted-foreground">
-                        Channel Pressure Avg
-                      </p>
-                      <p className="text-xl font-bold text-foreground">
-                        {formatWhole(activeGroup.channelAvg)}
-                      </p>
-                    </Card>
-                    <Card className="p-4 bg-muted/30">
-                      <p className="text-xs text-muted-foreground">
-                        Channel Pressure Max
-                      </p>
-                      <p className="text-xl font-bold text-foreground">
-                        {formatWhole(activeGroup.channelMax)}
-                      </p>
-                    </Card>
-                  </div>
-
-                  <ResponsiveContainer width="100%" height={420}>
-                    <ComposedChart data={trendData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis
-                        dataKey="bale"
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={11}
-                        interval="preserveStartEnd"
-                      />
-                      <YAxis
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={11}
-                        label={{
-                          value: "Pressure",
-                          angle: -90,
-                          position: "insideLeft",
-                        }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          background: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                        formatter={(value: any, name: any) => {
-                          if (value === null || value === undefined) {
-                            return ["No data", name];
-                          }
-
-                          return [formatWhole(Number(value)), name];
-                        }}
-                        labelFormatter={(_, payload: any[]) => {
-                          const item = payload?.[0]?.payload;
-
-                          if (!item) return "";
-
-                          return `Bale #${item.baleNumber} · ${item.timestamp} · ${item.material} · Recipe ${item.recipe}`;
-                        }}
-                      />
-                      <ReferenceLine
-                        y={Math.round(activeGroup.highAvg)}
-                        stroke={HIGH_PRESSURE_COLOR}
-                        strokeDasharray="6 6"
-                        label={{
-                          value: "High avg",
-                          position: "insideTopRight",
-                        }}
-                      />
-                      <ReferenceLine
-                        y={Math.round(activeGroup.channelAvg)}
-                        stroke={CHANNEL_PRESSURE_COLOR}
-                        strokeDasharray="6 6"
-                        label={{
-                          value: "Channel avg",
-                          position: "insideBottomRight",
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="highMax"
-                        name="High Pressure Max"
-                        stroke={HIGH_PRESSURE_COLOR}
-                        strokeWidth={3}
-                        connectNulls={false}
-                        dot={{ r: 4, fill: HIGH_PRESSURE_COLOR }}
-                        activeDot={{ r: 6 }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="channelMax"
-                        name="Channel Pressure Max"
-                        stroke={CHANNEL_PRESSURE_COLOR}
-                        strokeWidth={3}
-                        connectNulls={false}
-                        dot={{ r: 4, fill: CHANNEL_PRESSURE_COLOR }}
-                        activeDot={{ r: 6 }}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
+                <div className="rounded-md border overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/30">
+                        <th className="text-left py-3 px-3 font-semibold">
+                          Movement
+                        </th>
+                        <th className="text-right py-3 px-3 font-semibold">
+                          High Avg
+                        </th>
+                        <th className="text-right py-3 px-3 font-semibold">
+                          High Max
+                        </th>
+                        <th className="text-right py-3 px-3 font-semibold">
+                          Channel Avg
+                        </th>
+                        <th className="text-right py-3 px-3 font-semibold">
+                          Channel Max
+                        </th>
+                        <th className="text-right py-3 px-3 font-semibold">
+                          Events
+                        </th>
+                        <th className="text-right py-3 px-3 font-semibold">
+                          Bales
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {movementGroups.map((group) => (
+                        <tr key={group.label} className="border-b last:border-b-0">
+                          <td className="py-3 px-3 font-medium text-foreground">
+                            {group.label}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            {formatWhole(group.highAvg)}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            {formatWhole(group.highMax)}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            {formatWhole(group.channelAvg)}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            {formatWhole(group.channelMax)}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            {formatWhole(group.events)}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            {formatWhole(group.balesWithData)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
 
               {materialGroups.length > 0 && (
                 <Card className="p-6 border-2 border-card-border">
@@ -746,6 +718,9 @@ export default function PressurePage() {
                             Channel Max
                           </th>
                           <th className="text-right py-3 px-3 font-semibold">
+                            Events
+                          </th>
+                          <th className="text-right py-3 px-3 font-semibold">
                             Bales
                           </th>
                         </tr>
@@ -770,6 +745,9 @@ export default function PressurePage() {
                             </td>
                             <td className="py-3 px-3 text-right">
                               {formatWhole(group.channelMax)}
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              {formatWhole(group.events)}
                             </td>
                             <td className="py-3 px-3 text-right">
                               {formatWhole(group.balesWithData)}

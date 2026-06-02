@@ -9,6 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Package, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  calculateBaleQuality,
+  getQualityBadgeClass,
+} from "@/lib/baleQuality";
+
 
 function formatWhole(value: number | null | undefined) {
   return Math.round(Number(value || 0)).toString();
@@ -17,6 +22,18 @@ function formatWhole(value: number | null | undefined) {
 function formatVolume(value: number | null | undefined) {
   const volumeM3 = Number(value || 0) / 1000;
   return `${volumeM3.toFixed(1)}`;
+}
+
+function QualityBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${getQualityBadgeClass(
+        status as any
+      )}`}
+    >
+      {status}
+    </span>
+  );
 }
 
 export default function BalesPage() {
@@ -51,9 +68,17 @@ export default function BalesPage() {
     setPage(1);
   };
 
-  const SortHeader = ({ col, children }: { col: string; children: React.ReactNode }) => (
+  const SortHeader = ({
+    col,
+    children,
+    className = "",
+  }: {
+    col: string;
+    children: React.ReactNode;
+    className?: string;
+  }) => (
     <TableHead
-      className="cursor-pointer select-none hover:text-foreground"
+      className={`cursor-pointer select-none hover:text-foreground ${className}`}
       onClick={() => toggleSort(col)}
     >
       {children} {sort === col && (order === "DESC" ? "↓" : "↑")}
@@ -135,14 +160,15 @@ export default function BalesPage() {
                 <TableHeader>
                   <TableRow>
                     <SortHeader col="bale_number">Bale #</SortHeader>
+                    <TableHead>Quality</TableHead>
                     <SortHeader col="ts">Timestamp</SortHeader>
                     <SortHeader col="material_name">Material</SortHeader>
-                    <TableHead>Recipe</TableHead>
-                    <TableHead>Shift</TableHead>
-                    <SortHeader col="weight">Weight (kg)</SortHeader>
-                    <SortHeader col="volume">Volume (m³)</SortHeader>
-                    <SortHeader col="bale_length">Length (mm)</SortHeader>
-                    <SortHeader col="total_time">Total Time (s)</SortHeader>
+                    <TableHead className="text-right">Recipe</TableHead>
+                    <TableHead className="text-right">Shift</TableHead>
+                    <SortHeader col="weight" className="text-right">Weight (kg)</SortHeader>
+                    <SortHeader col="volume" className="text-right">Volume (m³)</SortHeader>
+                    <SortHeader col="bale_length" className="text-right">Length (mm)</SortHeader>
+                    <SortHeader col="total_time" className="text-right">Total Time (s)</SortHeader>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -153,6 +179,20 @@ export default function BalesPage() {
                       onClick={() => navigate(`/bales/${b.id}`)}
                     >
                       <TableCell className="font-medium">{b.bale_number}</TableCell>
+                      <TableCell>
+                        <QualityBadge
+                          status={
+                            calculateBaleQuality({
+                              materialName: b.material_name,
+                              baleNumber: b.bale_number,
+                              weight: b.weight,
+                              volume: b.volume,
+                              baleLength: b.bale_length,
+                              totalTime: b.total_time,
+                            }).status
+                          }
+                        />
+                      </TableCell>
                       <TableCell>{new Date(b.ts).toLocaleString()}</TableCell>
                       <TableCell>{b.material_name}</TableCell>
                       <TableCell>{b.recipe_number}</TableCell>
@@ -164,7 +204,7 @@ export default function BalesPage() {
                     </TableRow>
                   ))}
                   {data?.data.length === 0 && (
-                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No bales found</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No bales found</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
