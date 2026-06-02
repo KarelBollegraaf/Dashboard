@@ -6,9 +6,12 @@ const pool = mysql.createPool({
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "",
   database: process.env.DB_NAME || "BalerDB",
+
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
+  connectionLimit: 5,
+  queueLimit: 20,
+
+  connectTimeout: 5000,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
 });

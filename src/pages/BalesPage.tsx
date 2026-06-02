@@ -10,6 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Package, ChevronLeft, ChevronRight } from "lucide-react";
 
+function formatWhole(value: number | null | undefined) {
+  return Math.round(Number(value || 0)).toString();
+}
+
+function formatVolume(value: number | null | undefined) {
+  const volumeM3 = Number(value || 0) / 1000;
+  return `${volumeM3.toFixed(1)}`;
+}
+
 export default function BalesPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
@@ -132,7 +141,7 @@ export default function BalesPage() {
                     <TableHead>Shift</TableHead>
                     <SortHeader col="weight">Weight (kg)</SortHeader>
                     <SortHeader col="volume">Volume (m³)</SortHeader>
-                    <SortHeader col="bale_length">Length (cm)</SortHeader>
+                    <SortHeader col="bale_length">Length (mm)</SortHeader>
                     <SortHeader col="total_time">Total Time (s)</SortHeader>
                   </TableRow>
                 </TableHeader>
@@ -148,10 +157,10 @@ export default function BalesPage() {
                       <TableCell>{b.material_name}</TableCell>
                       <TableCell>{b.recipe_number}</TableCell>
                       <TableCell>{b.shift_number}</TableCell>
-                      <TableCell className="text-right">{b.weight?.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{b.volume?.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{b.bale_length?.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{b.total_time?.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{formatWhole(b.weight)}</TableCell>
+                      <TableCell className="text-right">{formatVolume(b.volume)}</TableCell>
+                      <TableCell className="text-right">{formatWhole(b.bale_length)}</TableCell>
+                      <TableCell className="text-right">{formatWhole(b.total_time)}</TableCell>
                     </TableRow>
                   ))}
                   {data?.data.length === 0 && (

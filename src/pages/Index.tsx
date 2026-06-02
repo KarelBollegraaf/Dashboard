@@ -14,6 +14,70 @@ import {
   Weight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from "recharts";
+
+const MATERIAL_COLORS = [
+  "#2563eb",
+  "#16a34a",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#06b6d4",
+  "#84cc16",
+  "#f97316",
+  "#ec4899",
+  "#14b8a6",
+  "#64748b",
+  "#a855f7",
+  "#22c55e",
+  "#eab308",
+  "#dc2626",
+  "#0ea5e9",
+  "#7c3aed",
+  "#65a30d",
+  "#ea580c",
+  "#be123c",
+];
+
+function getMaterialColor(index: number) {
+  return MATERIAL_COLORS[index % MATERIAL_COLORS.length];
+}
+
+function roundWhole(value: number) {
+  return Math.round(Number(value || 0)).toString();
+}
+
+function formatWhole(value: number, unit?: string) {
+  const rounded = Math.round(Number(value || 0));
+  return unit ? `${rounded} ${unit}` : `${rounded}`;
+}
+
+function formatVolume(value: number) {
+  const volumeM3 = Number(value || 0) / 1000;
+  return `${volumeM3.toFixed(1)} m³`;
+}
+
+function formatSeconds(value: number) {
+  return `${Math.round(Number(value || 0))} s`;
+}
+
+function formatHours(valueInSeconds: number) {
+  return `${(Number(valueInSeconds || 0) / 3600).toFixed(2)} h`;
+}
+
+function formatRamAverage(value: number) {
+  return Number(value || 0).toFixed(2);
+}
 
 function MetricCard({
   title,
@@ -71,6 +135,65 @@ function toggleNumberValue(
 ) {
   setList((prev) =>
     prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+  );
+}
+
+type ComparisonRow = {
+  label: string;
+  latest: string | number;
+  average?: string | number;
+  total?: string | number;
+};
+
+function ComparisonTable({
+  title,
+  rows,
+  showAverage = true,
+  showTotal = true,
+}: {
+  title: string;
+  rows: ComparisonRow[];
+  showAverage?: boolean;
+  showTotal?: boolean;
+}) {
+  return (
+    <Card className="p-4 overflow-x-auto">
+      <h4 className="text-base font-semibold mb-3">{title}</h4>
+
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/30">
+            <th className="text-left py-3 px-3 font-semibold">Metric</th>
+            <th className="text-left py-3 px-3 font-semibold">Latest Bale</th>
+            {showAverage && (
+              <th className="text-left py-3 px-3 font-semibold">
+                Average in Timeframe
+              </th>
+            )}
+            {showTotal && (
+              <th className="text-left py-3 px-3 font-semibold">
+                Total in Timeframe
+              </th>
+            )}
+          </tr>
+        </thead>
+
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label} className="border-b last:border-b-0">
+              <td className="py-3 px-3 text-muted-foreground">{row.label}</td>
+              <td className="py-3 px-3 font-medium">{row.latest}</td>
+              {showAverage && (
+                <td className="py-3 px-3 font-medium">{row.average ?? "—"}</td>
+              )}
+              {showTotal && (
+                <td className="py-3 px-3 font-medium">{row.total ?? "—"}</td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
   );
 }
 
@@ -182,21 +305,158 @@ const Index = () => {
   const timelineRows = overview.timeline?.rows ?? [];
   const timelineMap = new Map<string, any>();
 
+  const timelineMaterials = Array.from(
+    new Set(
+      timelineRows
+        .map((row: any) => row.materialName || "Unknown")
+        .filter(Boolean)
+    )
+  );
+
   for (const row of timelineRows) {
     const bucket = row.bucket;
     const material = row.materialName || "Unknown";
     const count = Number(row.baleCount ?? 0);
 
     if (!timelineMap.has(bucket)) {
-      timelineMap.set(bucket, { bucket, total: 0 });
+      timelineMap.set(bucket, {
+        bucket,
+        total: 0,
+        totalTimeHours: 0,
+        autoTimeHours: 0,
+        standbyTimeHours: 0,
+        emptyTimeHours: 0,
+      });
     }
 
     const item = timelineMap.get(bucket);
     item.total += count;
     item[material] = count;
+    item.totalTimeHours += Number(row.sumTotalTime ?? 0) / 3600;
+    item.autoTimeHours += Number(row.sumAutoTime ?? 0) / 3600;
+    item.standbyTimeHours += Number(row.sumStandbyTime ?? 0) / 3600;
+    item.emptyTimeHours += Number(row.sumEmptyTime ?? 0) / 3600;
   }
 
   const timelineData = Array.from(timelineMap.values());
+
+  const materialSummary =
+    latestOnly && materials.length > 0
+      ? materials.find((m: any) => m.materialName === latestOnly.materialName) ??
+        materials[0]
+      : materials[0];
+
+  const summaryCards =
+    latestOnly && materialSummary
+      ? [
+          { label: "Latest Bale", value: `#${latestOnly.baleNumber}` },
+          { label: "Material", value: latestOnly.materialName },
+          { label: "Bales Selected", value: `${materialSummary.count}` },
+          { label: "Recipe", value: `${latestOnly.recipeNumber}` },
+        ]
+      : [];
+
+  const productionRows: ComparisonRow[] =
+    latestOnly && materialSummary
+      ? [
+          {
+            label: "Weight",
+            latest: formatWhole(latestOnly.weight, "kg"),
+            average: formatWhole(materialSummary.avgWeight, "kg"),
+            total: formatWhole(materialSummary.totalWeight, "kg"),
+          },
+          {
+            label: "Volume",
+            latest: formatVolume(latestOnly.volume),
+            average: formatVolume(materialSummary.avgVolume),
+            total: formatVolume(materialSummary.totalVolume),
+          },
+          {
+            label: "Length",
+            latest: formatWhole(latestOnly.baleLength, "mm"),
+            average: formatWhole(materialSummary.avgLength, "mm"),
+            total: formatWhole(materialSummary.totalLength / 1000, "m"),
+          },
+          {
+            label: "kWh",
+            latest: formatWhole(latestOnly.kwhUsed, "kWh"),
+            average: formatWhole(materialSummary.avgKwh, "kWh"),
+            total: formatWhole(materialSummary.totalKwh, "kWh"),
+          },
+          {
+            label: "Ram Strokes",
+            latest: roundWhole(totalRamStrokes),
+            average: formatRamAverage(materialSummary.avgRamForwards),
+            total: roundWhole(materialSummary.totalRamForwards),
+          },
+        ]
+      : [];
+
+  const timeRows: ComparisonRow[] =
+    latestOnly && materialSummary
+      ? [
+          {
+            label: "Total Time",
+            latest: formatSeconds(latestOnly.totalTime),
+            average: formatSeconds(materialSummary.avgTotalTime),
+            total: formatHours(materialSummary.totalTotalTime),
+          },
+          {
+            label: "Auto Time",
+            latest: formatSeconds(latestOnly.autoTime),
+            average: formatSeconds(materialSummary.avgAutoTime),
+            total: formatHours(materialSummary.totalAutoTime),
+          },
+          {
+            label: "Standby Time",
+            latest: formatSeconds(latestOnly.standbyTime),
+            average: formatSeconds(materialSummary.avgStandbyTime),
+            total: formatHours(materialSummary.totalStandbyTime),
+          },
+          {
+            label: "Empty Time",
+            latest: formatSeconds(latestOnly.emptyTime),
+            average: formatSeconds(materialSummary.avgEmptyTime),
+            total: formatHours(materialSummary.totalEmptyTime),
+          },
+        ]
+      : [];
+
+  const machineRows: ComparisonRow[] =
+    latestOnly && materialSummary
+      ? [
+          {
+            label: "Max High Pressure",
+            latest: maxHighPressure ? roundWhole(maxHighPressure) : "—",
+            average: formatWhole(materialSummary.avgHighPressure),
+          },
+          {
+            label: "Max Channel Pressure",
+            latest: maxChannelPressure ? roundWhole(maxChannelPressure) : "—",
+            average: formatWhole(materialSummary.avgChannelPressure),
+          },
+          {
+            label: "Oil Temperature",
+            latest: `${roundWhole(latestOnly.oilTemperature ?? 0)} °C`,
+            average: `${roundWhole(materialSummary.avgOilTemperature)} °C`,
+          },
+          {
+            label: "Oil Level",
+            latest: roundWhole(latestOnly.oilLevel ?? 0),
+            average: roundWhole(materialSummary.avgOilLevel),
+          },
+          {
+            label: "Knots V",
+            latest: roundWhole(latestOnly.knotsVertical ?? 0),
+            average: roundWhole(materialSummary.avgKnotsVertical),
+          },
+          {
+            label: "Operators",
+            latest: "—",
+            average: materialSummary.operators || "—",
+          },
+        ]
+      : [];
 
   if (overviewQuery.isPending) {
     return (
@@ -374,99 +634,48 @@ const Index = () => {
         />
         <MetricCard
           title="Avg Weight"
-          value={stats.avgWeight.toFixed(1)}
+          value={stats.avgWeight.toFixed(0)}
           unit="kg"
           icon={Weight}
         />
         <MetricCard
           title="Total kWh"
-          value={stats.totalKwh.toFixed(1)}
+          value={stats.totalKwh.toFixed(0)}
           unit="kWh"
           icon={Zap}
         />
       </div>
 
-      {latestOnly && (
+      {latestOnly && materialSummary && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Latest Bale Details</h3>
-          <Card className="p-4">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {[
-                ["Bale Number", latestOnly.baleNumber],
-                ["Material", latestOnly.materialName],
-                ["Recipe", latestOnly.recipeNumber],
-                ["Shift", latestOnly.shiftNumber],
-                ["Weight", `${latestOnly.weight.toFixed(2)} kg`],
-                ["Volume", `${latestOnly.volume.toFixed(2)} m³`],
-                ["Length", `${latestOnly.baleLength.toFixed(2)} mm`],
-                ["kWh", latestOnly.kwhUsed.toFixed(2)],
-                ["Total Time", `${latestOnly.totalTime.toFixed(2)} s`],
-                ["Auto Time", `${latestOnly.autoTime.toFixed(2)} s`],
-                ["Standby Time", `${latestOnly.standbyTime.toFixed(2)} s`],
-                ["Empty Time", `${latestOnly.emptyTime.toFixed(2)} s`],
-                ["Max High Pressure", maxHighPressure || "—"],
-                ["Max Channel Pressure", maxChannelPressure || "—"],
-                ["Total Ram Strokes", totalRamStrokes],
-                ["Oil Temperature", `${(latestOnly.oilTemperature ?? 0).toFixed(2)} °C`],
-                ["Oil Level", (latestOnly.oilLevel ?? 0).toFixed(2)],
-                ["Knots V", latestOnly.knotsVertical],
-              ].map(([label, val]) => (
-                <div key={String(label)} className="border rounded-lg p-3">
-                  <div className="text-sm text-muted-foreground">{label}</div>
-                  <div className="text-lg font-semibold mt-1">{val}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
+          <div>
+            <h3 className="text-lg font-semibold">Bale Comparison</h3>
+            <p className="text-sm text-muted-foreground">
+              Latest bale compared with the selected timeframe.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-4">
+            {summaryCards.map((card) => (
+              <Card key={card.label} className="p-4">
+                <div className="text-sm text-muted-foreground">{card.label}</div>
+                <div className="text-2xl font-bold mt-2">{card.value}</div>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid gap-4">
+            <ComparisonTable title="Production" rows={productionRows} />
+            <ComparisonTable title="Time" rows={timeRows} />
+            <ComparisonTable
+              title="Machine"
+              rows={machineRows}
+              showAverage={true}
+              showTotal={false}
+            />
+          </div>
         </div>
       )}
-
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Material Breakdown - Time Frame</h3>
-
-        {materials.map((m: any) => (
-          <Card key={m.materialName} className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-lg font-semibold">{m.materialName}</h4>
-              <span className="text-sm text-muted-foreground">{m.count} bales</span>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {[
-                ["Avg Weight", `${m.avgWeight.toFixed(2)} kg`],
-                ["Total Weight", `${Math.round(m.totalWeight)} kg`],
-                ["Avg Length", `${m.avgLength.toFixed(2)} mm`],
-                ["Total Length", `${(m.totalLength / 1000).toFixed(2)} m`],
-                ["Avg kWh", m.avgKwh.toFixed(2)],
-                ["Total kWh", m.totalKwh.toFixed(2)],
-                ["Avg Total Time", `${m.avgTotalTime.toFixed(2)} s`],
-                ["Total Time", `${(m.totalTotalTime / 3600).toFixed(2)} h`],
-                ["Avg Auto Time", `${m.avgAutoTime.toFixed(2)} s`],
-                ["Total Auto Time", `${(m.totalAutoTime / 3600).toFixed(2)} h`],
-                ["Avg Standby Time", `${m.avgStandbyTime.toFixed(2)} s`],
-                ["Total Standby Time", `${(m.totalStandbyTime / 3600).toFixed(2)} h`],
-                ["Avg Empty Time", `${m.avgEmptyTime.toFixed(2)} s`],
-                ["Total Empty Time", `${(m.totalEmptyTime / 3600).toFixed(2)} h`],
-                ["Avg Ram Strokes", m.avgRamForwards.toFixed(2)],
-                ["Total Ram Strokes", m.totalRamForwards.toFixed(0)],
-                ["Operators", m.operators || "—"],
-                ["Bales", m.count],
-              ].map(([label, val]) => (
-                <div key={String(label)} className="border rounded-lg p-3">
-                  <div className="text-sm text-muted-foreground">{label}</div>
-                  <div className="text-lg font-semibold mt-1">{val}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        ))}
-
-        {materials.length === 0 && (
-          <Card className="p-4">
-            <div className="text-muted-foreground">No materials found</div>
-          </Card>
-        )}
-      </div>
 
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">Time Summary</h3>
@@ -495,32 +704,116 @@ const Index = () => {
         </Card>
 
         <div className="grid gap-4">
-          {timelineData.map((row) => (
-            <Card key={row.bucket} className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="font-medium">{row.bucket}</div>
+          {timelineData.length > 0 ? (
+            <Card className="p-4">
+              <div className="mb-4">
+                <div className="text-lg font-semibold">
+                  Bales per Material and Time per {overview.timeline?.bucket ?? "day"}
+                </div>
                 <div className="text-sm text-muted-foreground">
-                  {row.total} bale{row.total === 1 ? "" : "s"}
+                  Bars = bales per material, lines = hours
                 </div>
               </div>
 
-              <div className="space-y-2">
-                {Object.entries(row)
-                  .filter(([key]) => key !== "bucket" && key !== "total")
-                  .map(([material, count]) => (
-                    <div
-                      key={material}
-                      className="flex items-center justify-between text-sm border rounded px-3 py-2"
-                    >
-                      <span>{material}</span>
-                      <span>{String(count)}</span>
-                    </div>
-                  ))}
+              <div className="h-[420px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={timelineData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="bucket" />
+
+                    <YAxis
+                      yAxisId="left"
+                      allowDecimals={false}
+                      label={{ value: "Bales", angle: -90, position: "insideLeft" }}
+                    />
+
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      label={{ value: "Hours", angle: 90, position: "insideRight" }}
+                    />
+
+                    <Tooltip
+                      formatter={(value: any, name: any) => {
+                        const numberValue = Number(value);
+
+                        if (!Number.isFinite(numberValue)) {
+                          return [value, name];
+                        }
+
+                        const isMaterial = timelineMaterials.includes(String(name));
+
+                        if (isMaterial) {
+                          return [numberValue.toFixed(0), name];
+                        }
+
+                        return [numberValue.toFixed(2), name];
+                      }}
+                      labelFormatter={(label) => `Time: ${label}`}
+                    />
+
+                    <Legend />
+
+                    {timelineMaterials.map((material, index) => (
+                      <Bar
+                        key={material}
+                        yAxisId="left"
+                        dataKey={material}
+                        name={material}
+                        stackId="bales"
+                        fill={getMaterialColor(index)}
+                        radius={[6, 6, 0, 0]}
+                      />
+                    ))}
+
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="totalTimeHours"
+                      name="Total Time"
+                      stroke="#1d4ed8"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "#1d4ed8", strokeWidth: 2 }}
+                      activeDot={{ r: 6 }}
+                    />
+
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="autoTimeHours"
+                      name="Auto Time"
+                      stroke="#15803d"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "#15803d", strokeWidth: 2 }}
+                      activeDot={{ r: 6 }}
+                    />
+
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="standbyTimeHours"
+                      name="Standby Time"
+                      stroke="#d97706"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "#d97706", strokeWidth: 2 }}
+                      activeDot={{ r: 6 }}
+                    />
+
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="emptyTimeHours"
+                      name="Empty Time"
+                      stroke="#dc2626"
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: "#dc2626", strokeWidth: 2 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
             </Card>
-          ))}
-
-          {timelineData.length === 0 && (
+          ) : (
             <Card className="p-4 text-sm text-muted-foreground">
               No bale timeline data found for the selected filters.
             </Card>

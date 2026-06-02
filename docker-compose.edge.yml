@@ -2,7 +2,6 @@ version: "2.4"
 
 services:
   dashboard:
-    build: .
     image: bollegraaf-dashboard:1.0.0
     container_name: dashboard
     restart: always

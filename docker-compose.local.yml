@@ -8,8 +8,8 @@ services:
     restart: always
 
     environment:
-      DB_HOST: db
-      DB_PORT: 3306
+      DB_HOST: 192.168.1.1
+      DB_PORT: 59972
       DB_USER: db_user
       DB_PASSWORD: db_password
       DB_NAME: BalerDB
@@ -20,11 +20,3 @@ services:
 
     mem_limit: 350m
     mem_reservation: 250m
-
-    networks:
-      - proxy-redirect
-
-networks:
-  proxy-redirect:
-    external: true
-    name: proxy-redirect
