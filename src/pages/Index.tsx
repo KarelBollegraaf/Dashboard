@@ -249,15 +249,44 @@ function QualityBaleHoverList({
   );
 }
 
-function QualityBadge({ status }: { status: string }) {
+function QualityBaleHoverList({
+  bales,
+  onOpenBale,
+}: {
+  bales: any[];
+  onOpenBale: (id: number) => void;
+}) {
+  if (bales.length === 0) return null;
+
   return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getQualityBadgeClass(
-        status as any
-      )}`}
-    >
-      {status}
-    </span>
+    <div className="absolute left-0 top-full z-50 mt-2 hidden w-[280px] rounded-xl border bg-background p-3 shadow-xl group-hover:block">
+      <div className="mb-2 text-xs font-semibold text-foreground">
+        Bales to check
+      </div>
+
+      <div className="max-h-64 space-y-1 overflow-auto">
+        {bales.slice(0, 20).map((bale) => (
+          <button
+            key={bale.id}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenBale(bale.id);
+            }}
+            className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
+          >
+            <span className="font-medium">#{bale.baleNumber}</span>
+            <span className="text-muted-foreground">{bale.materialName}</span>
+          </button>
+        ))}
+      </div>
+
+      {bales.length > 20 && (
+        <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
+          Showing first 20 of {bales.length}
+        </div>
+      )}
+    </div>
   );
 }
 
