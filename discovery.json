@@ -1,0 +1,7 @@
+{
+  "name": "Bollegraaf Dashboard",
+  "description": "Dashboard for baler statistics and bale quality",
+  "version": "1.1.1",
+  "provider": "Bollegraaf",
+  "type": "WebApplication"
+}
