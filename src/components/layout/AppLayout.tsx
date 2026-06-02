@@ -10,18 +10,20 @@ const navItems = [
   { to: "/bales", label: "Bales" },
   { to: "/cycles", label: "Cycle Times" },
   { to: "/pressure", label: "Pressure" },
-  { to: "/events", label: "Events" },
-  { to: "/raw", label: "Raw Messages" },
+  { to: "/quality", label: "Quality Rules" },
 ];
 
 export function AppLayout() {
-  const { data } = useQuery({ queryKey: ["overview"], queryFn: fetchOverview, refetchInterval: 10000 });
+  const { data } = useQuery({
+    queryKey: ["overview"],
+    queryFn: fetchOverview,
+    refetchInterval: 10000,
+  });
 
   const isOnline = !!data?.latest;
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="bg-card border-b border-card-border px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -33,20 +35,29 @@ export function AppLayout() {
               </div>
               <h1 className="text-2xl font-bold text-secondary">Bollegraaf</h1>
             </div>
+
             <div className="h-8 w-px bg-border"></div>
-            <h2 className="text-lg font-semibold text-foreground">Baler Statistics</h2>
+
+            <h2 className="text-lg font-semibold text-foreground">
+              Baler Statistics
+            </h2>
           </div>
 
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-muted-foreground" />
-              <Badge className={cn(
-                "px-3 py-1 font-semibold",
-                isOnline ? "bg-status-running text-white" : "bg-status-idle text-white"
-              )}>
+              <Badge
+                className={cn(
+                  "px-3 py-1 font-semibold",
+                  isOnline
+                    ? "bg-status-running text-white"
+                    : "bg-status-idle text-white"
+                )}
+              >
                 {isOnline ? "Online" : "Connecting..."}
               </Badge>
             </div>
+
             {data?.latest && (
               <div className="text-sm text-muted-foreground">
                 Last bale: {new Date(data.latest.ts).toLocaleTimeString()}
@@ -56,7 +67,6 @@ export function AppLayout() {
         </div>
       </header>
 
-      {/* Navigation */}
       <nav className="bg-card border-b border-card-border px-6">
         <div className="flex gap-1 overflow-x-auto">
           {navItems.map((item) => (
@@ -79,7 +89,6 @@ export function AppLayout() {
         </div>
       </nav>
 
-      {/* Content */}
       <main className="p-6 max-w-[1800px] mx-auto">
         <Outlet />
       </main>

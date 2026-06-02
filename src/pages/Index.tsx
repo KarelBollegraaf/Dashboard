@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { adaptOverview } from "@/lib/dashboardAdapter";
 import {
@@ -207,6 +208,47 @@ function ComparisonTable({
   );
 }
 
+function QualityBaleHoverList({
+  bales,
+  onOpenBale,
+}: {
+  bales: any[];
+  onOpenBale: (id: number) => void;
+}) {
+  if (bales.length === 0) return null;
+
+  return (
+    <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 hidden w-[280px] rounded-xl border bg-background p-3 shadow-xl group-hover:block">
+      <div className="mb-2 text-xs font-semibold text-foreground">
+        Bales to check
+      </div>
+
+      <div className="max-h-64 space-y-1 overflow-auto">
+        {bales.slice(0, 20).map((bale) => (
+          <button
+            key={bale.id}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenBale(bale.id);
+            }}
+            className="pointer-events-auto flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
+          >
+            <span className="font-medium">#{bale.baleNumber}</span>
+            <span className="text-muted-foreground">{bale.materialName}</span>
+          </button>
+        ))}
+      </div>
+
+      {bales.length > 20 && (
+        <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
+          Showing first 20 of {bales.length}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QualityBadge({ status }: { status: string }) {
   return (
     <span
@@ -220,6 +262,7 @@ function QualityBadge({ status }: { status: string }) {
 }
 
 const Index = () => {
+  const navigate = useNavigate();
   const [preset, setPreset] = useState("last7d");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -285,22 +328,43 @@ const Index = () => {
       selectedMaterials,
       selectedRecipes,
     ],
-    queryFn: () =>
-      fetchBales({
+    queryFn: async () => {
+      const firstPage = await fetchBales({
         page: 1,
-        limit: 5000,
+        limit: 100,
         sort: "ts",
         order: "DESC",
         from: range.from,
         to: range.to,
         material:
           selectedMaterials.length === 1 ? selectedMaterials[0] : undefined,
-      }),
+      });
+
+      const allBales = [...(firstPage.data ?? [])];
+      const totalPages = firstPage.pagination?.totalPages ?? 1;
+
+      for (let page = 2; page <= totalPages; page += 1) {
+        const nextPage = await fetchBales({
+          page,
+          limit: 100,
+          sort: "ts",
+          order: "DESC",
+          from: range.from,
+          to: range.to,
+          material:
+            selectedMaterials.length === 1 ? selectedMaterials[0] : undefined,
+        });
+
+        allBales.push(...(nextPage.data ?? []));
+      }
+
+      return allBales;
+    },
     refetchInterval: 10000,
     retry: 1,
   });
 
-  const qualityBalesRaw = qualityBalesQuery.data?.data ?? [];
+  const qualityBalesRaw = qualityBalesQuery.data ?? [];
 
   const qualityBales = qualityBalesRaw.filter((b: any) => {
     const materialName = b.material_name ?? b.materialName;
@@ -392,6 +456,35 @@ const Index = () => {
   );
 
 const qualityTotal = qualityBales.length;
+
+const qualityRows = qualityBales.map((b: any) => {
+  const quality = calculateBaleQuality({
+    materialName: b.material_name ?? b.materialName,
+    baleNumber: b.bale_number ?? b.baleNumber,
+    weight: b.weight,
+    volume: b.volume,
+    baleLength: b.bale_length ?? b.baleLength,
+    totalTime: b.total_time ?? b.totalTime,
+    autoTime: b.auto_time ?? b.autoTime,
+    kwhUsed: b.kwh_used ?? b.kwhUsed,
+  });
+
+  return {
+    id: b.id,
+    baleNumber: b.bale_number ?? b.baleNumber,
+    materialName: b.material_name ?? b.materialName,
+    ts: b.ts,
+    quality,
+  };
+});
+
+const warningBales = qualityRows.filter(
+  (b: any) => b.quality.status === "WARNING"
+);
+
+const unknownBales = qualityRows.filter(
+  (b: any) => b.quality.status === "UNKNOWN"
+);
 
   const qualityGoodPercent =
     qualityTotal > 0
@@ -753,94 +846,97 @@ const qualityTotal = qualityBales.length;
       </div>
 
       <Card className="p-5 border-2 border-card-border">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
+        <div className="grid gap-5 xl:grid-cols-[260px_1fr_260px] items-center">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <h3 className="text-xl font-bold text-foreground">Bale Quality</h3>
               {latestQuality && <QualityBadge status={latestQuality.status} />}
             </div>
 
             <p className="text-sm text-muted-foreground mt-1">
-              Based on weight, length, density and total time.
+              Weight, length, density and total time.
             </p>
           </div>
 
-          <div className="text-right">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              GOOD + OK
-            </div>
-            <div className="text-4xl font-bold text-foreground">
-              {qualityGoodPercent}%
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {qualityTotal} scored / {stats.totalBales} selected
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-[1fr_360px] mt-5">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-green-300 bg-green-50 p-4">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-3">
               <div className="text-xs font-semibold text-green-700">GOOD</div>
-              <div className="mt-2 text-3xl font-bold text-green-950">
+              <div className="mt-1 text-2xl font-bold text-green-950">
                 {qualitySummary.GOOD}
               </div>
             </div>
 
-            <div className="rounded-xl border border-blue-300 bg-blue-50 p-4">
+            <div className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-3">
               <div className="text-xs font-semibold text-blue-700">OK</div>
-              <div className="mt-2 text-3xl font-bold text-blue-950">
+              <div className="mt-1 text-2xl font-bold text-blue-950">
                 {qualitySummary.OK}
               </div>
             </div>
 
-            <div className="rounded-xl border border-orange-300 bg-orange-50 p-4">
+            <div className="group relative rounded-lg border border-orange-300 bg-orange-50 px-4 py-3">
               <div className="text-xs font-semibold text-orange-700">WARNING</div>
-              <div className="mt-2 text-3xl font-bold text-orange-950">
+              <div className="mt-1 text-2xl font-bold text-orange-950">
                 {qualitySummary.WARNING}
               </div>
+
+              {warningBales.length > 0 && (
+                <div className="mt-1 text-xs text-orange-700">
+                  Hover / click bale
+                </div>
+              )}
+
+              <QualityBaleHoverList
+                bales={warningBales}
+                onOpenBale={(id) => navigate(`/bales/${id}`)}
+              />
             </div>
 
-            <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
+            <div className="group relative rounded-lg border border-slate-300 bg-slate-50 px-4 py-3">
               <div className="text-xs font-semibold text-slate-600">UNKNOWN</div>
-              <div className="mt-2 text-3xl font-bold text-slate-900">
+              <div className="mt-1 text-2xl font-bold text-slate-900">
                 {qualitySummary.UNKNOWN}
               </div>
-            </div>
-          </div>
 
-          <div className="rounded-xl border bg-muted/20 p-4">
+              {unknownBales.length > 0 && (
+                <div className="mt-1 text-xs text-slate-600">
+                  Hover / click bale
+                </div>
+              )}
+
+              <QualityBaleHoverList
+                bales={unknownBales}
+                onOpenBale={(id) => navigate(`/bales/${id}`)}
+              />
+            </div>
+
+          <div className="rounded-lg border bg-muted/20 px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-sm text-muted-foreground">Latest bale</div>
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="text-2xl font-bold">
-                    #{latestOnly?.baleNumber ?? "—"}
-                  </span>
-                  {latestQuality && <QualityBadge status={latestQuality.status} />}
+                <div className="text-xs text-muted-foreground">GOOD + OK</div>
+                <div className="text-3xl font-bold text-foreground">
+                  {qualityGoodPercent}%
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {qualityTotal} scored / {stats.totalBales} selected
                 </div>
               </div>
 
               <div className="text-right">
-                <div className="text-sm text-muted-foreground">Score</div>
-                <div className="text-2xl font-bold">
-                  {latestQuality ? `${latestQuality.score}/100` : "—"}
-                </div>
+                <div className="text-xs text-muted-foreground">Latest</div>
+                <div className="font-bold">#{latestOnly?.baleNumber ?? "—"}</div>
+                {latestQuality && (
+                  <div className="mt-1">
+                    <QualityBadge status={latestQuality.status} />
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="mt-4 border-t pt-3">
-              <div className="text-sm font-medium">Notes</div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                {latestQuality && latestQuality.reasons.length > 0
-                  ? latestQuality.reasons.join(", ")
-                  : "No quality warnings for the latest bale."}
+            {latestQuality && latestQuality.reasons.length > 0 && (
+              <div className="mt-3 border-t pt-2 text-xs text-muted-foreground">
+                {latestQuality.reasons.join(", ")}
               </div>
-            </div>
-
-            <div className="mt-4 text-xs text-muted-foreground">
-              Change limits on the Quality Rules page.
-            </div>
+            )}
           </div>
         </div>
       </Card>
