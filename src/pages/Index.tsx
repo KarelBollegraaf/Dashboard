@@ -244,10 +244,11 @@ function QualityBaleHoverList({
   if (bales.length === 0) return null;
 
   return (
-    <div className="absolute left-0 top-full z-50 mt-2 hidden w-[280px] rounded-xl border bg-background p-3 shadow-xl group-hover:block">
-      <div className="mb-2 text-xs font-semibold text-foreground">
-        Bales to check
-      </div>
+    <div className="absolute left-0 top-full z-50 hidden w-[280px] pt-2 group-hover:block">
+      <div className="rounded-xl border bg-background p-3 shadow-xl">
+        <div className="mb-2 text-xs font-semibold text-foreground">
+          Bales to check
+        </div>
 
       <div className="max-h-64 space-y-1 overflow-auto">
         {bales.slice(0, 20).map((bale) => (
@@ -272,6 +273,7 @@ function QualityBaleHoverList({
         </div>
       )}
     </div>
+  </div>
   );
 }
 

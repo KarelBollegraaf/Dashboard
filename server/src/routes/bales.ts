@@ -1,6 +1,7 @@
 import { Router } from "express";
 import pool from "../db.js";
 
+
 export const balesRouter = Router();
 
 balesRouter.get("/", async (req, res) => {
