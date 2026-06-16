@@ -13,6 +13,16 @@ const navItems = [
   { to: "/quality", label: "Quality Rules" },
 ];
 
+function formatTimestampTime(value?: string | null) {
+  if (!value) return "—";
+
+  return String(value)
+    .replace("T", " ")
+    .replace(/\.\d{3}Z$/, "")
+    .replace(/Z$/, "")
+    .slice(11, 19);
+}
+
 export function AppLayout() {
   const { data } = useQuery({
     queryKey: ["overview"],
@@ -60,7 +70,7 @@ export function AppLayout() {
 
             {data?.latest && (
               <div className="text-sm text-muted-foreground">
-                Last bale: {new Date(data.latest.ts).toLocaleTimeString()}
+                Last bale: {formatTimestampTime(data.latest.ts)}
               </div>
             )}
           </div>
