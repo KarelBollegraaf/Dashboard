@@ -90,6 +90,20 @@ function formatRamAverage(value: number) {
   return Number(value || 0).toFixed(2);
 }
 
+function formatTimestamp(value?: string | null) {
+  if (!value) return "—";
+
+  return String(value)
+    .replace("T", " ")
+    .replace(/\.\d{3}Z$/, "")
+    .replace(/Z$/, "");
+}
+
+function formatTimestampTime(value?: string | null) {
+  const formatted = formatTimestamp(value);
+  return formatted === "—" ? "—" : formatted.slice(11, 19);
+}
+
 function MetricCard({
   title,
   value,
@@ -121,6 +135,18 @@ function MetricCard({
         <Icon className="w-6 h-6 text-muted-foreground" />
       </div>
     </Card>
+  );
+}
+
+function QualityBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${getQualityBadgeClass(
+        status as any
+      )}`}
+    >
+      {status}
+    </span>
   );
 }
 
@@ -249,6 +275,17 @@ function QualityBaleHoverList({
   );
 }
 
+function toDbDateTime(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  const second = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
 const Index = () => {
   const navigate = useNavigate();
   const [preset, setPreset] = useState("last7d");
@@ -261,8 +298,8 @@ const Index = () => {
   const range = useMemo(() => {
     if (preset === "custom" && from && to) {
       return {
-        from: new Date(from).toISOString(),
-        to: new Date(to).toISOString(),
+        from: from.replace("T", " ") + (from.length === 16 ? ":00" : ""),
+        to: to.replace("T", " ") + (to.length === 16 ? ":00" : ""),
       };
     }
 
@@ -275,8 +312,8 @@ const Index = () => {
     else if (preset === "last365d") start.setDate(now.getDate() - 365);
 
     return {
-      from: start.toISOString(),
-      to: now.toISOString(),
+      from: toDbDateTime(start),
+      to: toDbDateTime(now),
     };
   }, [preset, from, to]);
 
@@ -674,7 +711,7 @@ const unknownBales = qualityRows.filter(
         <div className="flex flex-wrap items-center gap-2 text-muted-foreground mt-1">
           <span>
             Latest bale #{latestOnly?.baleNumber ?? 0} ·{" "}
-            {latestOnly?.ts ? new Date(latestOnly.ts).toLocaleString() : "—"}
+            {formatTimestamp(latestOnly?.ts)}
           </span>
           {latestQuality && <QualityBadge status={latestQuality.status} />}
           {latestQuality && (
@@ -896,6 +933,7 @@ const unknownBales = qualityRows.filter(
                 onOpenBale={(id) => navigate(`/bales/${id}`)}
               />
             </div>
+        </div>
 
           <div className="rounded-lg border bg-muted/20 px-4 py-3">
             <div className="flex items-start justify-between gap-3">

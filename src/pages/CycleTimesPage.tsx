@@ -130,14 +130,25 @@ function getAverage(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function toDbDateTime(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  const second = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
 function getRange(hours: number) {
   const to = new Date();
   const from = new Date(to);
   from.setHours(to.getHours() - hours);
 
   return {
-    from: from.toISOString(),
-    to: to.toISOString(),
+    from: toDbDateTime(from),
+    to: toDbDateTime(to),
   };
 }
 
@@ -201,9 +212,7 @@ function buildMotionGroups(records: BaleCycleRecord[]): MotionGroup[] {
       return {
         label,
         records: groupRecords.sort((a, b) => {
-          const timeA = new Date(a.ts).getTime();
-          const timeB = new Date(b.ts).getTime();
-          return timeA - timeB;
+          return a.ts.localeCompare(b.ts);
         }),
         allValuesMs,
         count: allValuesMs.length,
@@ -315,7 +324,7 @@ export default function CycleTimesPage() {
     selectedGroup?.records.map((record) => ({
       bale: `#${record.baleNumber}`,
       baleNumber: record.baleNumber,
-      timestamp: record.ts ? new Date(record.ts).toLocaleString() : "—",
+      timestamp: record.ts || "—",
       material: record.materialName,
       recipe: record.recipeNumber,
       avgSeconds: Number(record.avgSeconds.toFixed(3)),
@@ -384,11 +393,11 @@ export default function CycleTimesPage() {
           <div className="text-sm text-muted-foreground">
             Showing cycles from{" "}
             <span className="font-medium text-foreground">
-              {new Date(range.from).toLocaleString()}
+              {range.from}
             </span>{" "}
             to{" "}
             <span className="font-medium text-foreground">
-              {new Date(range.to).toLocaleString()}
+              {range.to}
             </span>
           </div>
         </div>

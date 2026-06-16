@@ -104,10 +104,9 @@ function getMotionOrder(label: string) {
 }
 
 function sortByTimeAndMovement(a: PressureRecord, b: PressureRecord) {
-  const timeA = new Date(a.ts).getTime();
-  const timeB = new Date(b.ts).getTime();
+  const timeCompare = a.ts.localeCompare(b.ts);
 
-  if (timeA !== timeB) return timeA - timeB;
+  if (timeCompare !== 0) return timeCompare;
 
   const orderA = getMotionOrder(a.label);
   const orderB = getMotionOrder(b.label);
@@ -148,14 +147,30 @@ function maxValue(values: number[]) {
   return Math.max(...values);
 }
 
+function toDbDateTime(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  const second = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
+function formatTimestamp(value?: string | null) {
+  if (!value) return "—";
+  return String(value).replace("T", " ").replace(/\.\d{3}Z$/, "").replace(/Z$/, "");
+}
+
 function getRange(hours: number) {
   const to = new Date();
   const from = new Date(to);
   from.setHours(to.getHours() - hours);
 
   return {
-    from: from.toISOString(),
-    to: to.toISOString(),
+    from: toDbDateTime(from),
+    to: toDbDateTime(to),
   };
 }
 
@@ -379,7 +394,7 @@ export default function PressurePage() {
     label: `#${record.baleNumber}`,
     baleNumber: record.baleNumber,
     movement: record.label,
-    timestamp: record.ts ? new Date(record.ts).toLocaleString() : "—",
+    timestamp: formatTimestamp(record.ts),
     material: record.materialName,
     recipe: record.recipeNumber,
     highMax: record.highCount > 0 ? record.highMax : null,
@@ -435,11 +450,11 @@ export default function PressurePage() {
           <div className="text-sm text-muted-foreground">
             Showing all pressure events from{" "}
             <span className="font-medium text-foreground">
-              {new Date(range.from).toLocaleString()}
+              {formatTimestamp(range.from)}
             </span>{" "}
             to{" "}
             <span className="font-medium text-foreground">
-              {new Date(range.to).toLocaleString()}
+              {formatTimestamp(range.to)}
             </span>
           </div>
         </div>

@@ -14,6 +14,10 @@ import {
   getQualityBadgeClass,
 } from "@/lib/baleQuality";
 
+function formatTimestamp(value?: string | null) {
+  if (!value) return "—";
+  return String(value).replace("T", " ").replace(/\.\d{3}Z$/, "").replace(/Z$/, "");
+}
 
 function formatWhole(value: number | null | undefined) {
   return Math.round(Number(value || 0)).toString();
@@ -53,8 +57,8 @@ export default function BalesPage() {
       page, limit, sort, order,
       material: material || undefined,
       bale_number: baleNumber ? Number(baleNumber) : undefined,
-      from: from || undefined,
-      to: to || undefined,
+      from: from ? from.replace("T", " ") + (from.length === 16 ? ":00" : "") : undefined,
+      to: to ? to.replace("T", " ") + (to.length === 16 ? ":00" : "") : undefined,
     }),
   });
 
@@ -193,7 +197,7 @@ export default function BalesPage() {
                           }
                         />
                       </TableCell>
-                      <TableCell>{new Date(b.ts).toLocaleString()}</TableCell>
+                      <TableCell>{formatTimestamp(b.ts)}</TableCell>
                       <TableCell>{b.material_name}</TableCell>
                       <TableCell>{b.recipe_number}</TableCell>
                       <TableCell>{b.shift_number}</TableCell>

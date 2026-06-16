@@ -16,6 +16,11 @@ export default function EventsPage() {
     queryFn: () => fetchEvents({ page, limit }),
   });
 
+  function formatTimestamp(value?: string | null) {
+  if (!value) return "—";
+  return String(value).replace("T", " ").replace(/\.\d{3}Z$/, "").replace(/Z$/, "");
+}
+
   return (
     <div className="space-y-4">
       <Card className="p-6 border-2 border-card-border">
@@ -45,7 +50,7 @@ export default function EventsPage() {
                   {data?.data.map((e) => (
                     <TableRow key={e.id}>
                       <TableCell className="font-medium">{e.id}</TableCell>
-                      <TableCell>{new Date(e.ts).toLocaleString()}</TableCell>
+                      <TableCell>{formatTimestamp(e.ts)}</TableCell>
                       <TableCell className="font-mono text-xs">{e.event_identifier ?? "—"}</TableCell>
                       <TableCell>{e.bale_ready != null ? String(e.bale_ready) : "—"}</TableCell>
                       <TableCell>{e.bale_click != null ? String(e.bale_click) : "—"}</TableCell>

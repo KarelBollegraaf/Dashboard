@@ -316,7 +316,7 @@ export default function BaleDetailPage() {
         </h2>
 
         <p className="text-sm text-muted-foreground mt-1">
-          {new Date(bale.ts).toLocaleString()}
+          {formatTimestamp(bale.ts)}
         </p>
 
         <Tabs defaultValue="summary" className="mt-6">
