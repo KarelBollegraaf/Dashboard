@@ -1,17 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Activity } from "lucide-react";
+import { Activity, LogOut, UserCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
+import { DASHBOARD_NAV_ITEMS } from "@/auth/permissions";
+import { useAuth } from "@/auth/AuthProvider";
 import { fetchOverview } from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-const navItems = [
-  { to: "/", label: "Overview", end: true },
-  { to: "/bales", label: "Bales" },
-  { to: "/cycles", label: "Cycle Times" },
-  { to: "/pressure", label: "Pressure" },
-  { to: "/quality", label: "Quality Rules" },
-];
 
 function formatTimestampTime(value?: string | null) {
   if (!value) return "—";
@@ -24,18 +18,25 @@ function formatTimestampTime(value?: string | null) {
 }
 
 export function AppLayout() {
+  const { currentUser, hasPermission, logout } = useAuth();
+  const canViewOverview = hasPermission("overview.view");
+
   const { data } = useQuery({
     queryKey: ["overview"],
     queryFn: fetchOverview,
     refetchInterval: 10000,
+    enabled: canViewOverview,
   });
 
-  const isOnline = !!data?.latest;
+  const isOnline = canViewOverview && !!data?.latest;
+  const visibleNavItems = DASHBOARD_NAV_ITEMS.filter((item) =>
+    hasPermission(item.permission)
+  );
 
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-card-border px-6 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
               <div className="flex gap-1">
@@ -64,7 +65,7 @@ export function AppLayout() {
                     : "bg-status-idle text-white"
                 )}
               >
-                {isOnline ? "Online" : "Connecting..."}
+                {isOnline ? "Online" : "Limited"}
               </Badge>
             </div>
 
@@ -73,13 +74,27 @@ export function AppLayout() {
                 Last bale: {formatTimestampTime(data.latest.ts)}
               </div>
             )}
+
+            <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
+              <UserCircle className="h-5 w-5" />
+              <span>{currentUser?.email}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </button>
           </div>
         </div>
       </header>
 
       <nav className="bg-card border-b border-card-border px-6">
         <div className="flex gap-1 overflow-x-auto">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

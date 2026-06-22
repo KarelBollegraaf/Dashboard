@@ -10,22 +10,70 @@ import type {
 } from "@/types/database";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
-  
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
-    cache: "no-store",
-    headers: {
-      "Cache-Control": "no-cache",
-      Pragma: "no-cache",
-    },
-  });
+const AUTH_SESSION_STORAGE_KEY = "dashboard.auth.session.v1";
 
+function getAuthToken() {
+  try {
+    const raw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+
+    const session = JSON.parse(raw) as { token?: string };
+    return session.token || null;
+  } catch {
+    return null;
+  }
+}
+
+function createHeaders(includeJson = false) {
+  const token = getAuthToken();
+
+  const headers: Record<string, string> = {
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+  };
+
+  if (includeJson) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
+async function parseApiResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(body.error || `API error ${res.status}`);
   }
 
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   return res.json();
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${url}`, {
+    cache: "no-store",
+    headers: createHeaders(),
+  });
+
+  return parseApiResponse<T>(res);
+}
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${url}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: createHeaders(true),
+    body: JSON.stringify(body),
+  });
+
+  return parseApiResponse<T>(res);
 }
 
 // Overview
@@ -117,4 +165,36 @@ export function fetchCycles(rawId: number): Promise<{ cycles: ParsedCycle[] }> {
 // Pressure
 export function fetchPressure(rawId: number): Promise<{ pressure: ParsedPressure[] }> {
   return fetchJson(`/pressure/${rawId}`);
+}
+
+// Auth email actions
+export function requestPasswordReset(email: string): Promise<{ ok: boolean }> {
+  return postJson("/auth/forgot-password", { email });
+}
+
+export function resetPasswordWithToken(
+  token: string,
+  password: string
+): Promise<{ ok: boolean; email?: string }> {
+  return postJson("/auth/reset-password", { token, password });
+}
+
+interface LoginEmailUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export function sendUserInvite(user: LoginEmailUser): Promise<{ ok: boolean }> {
+  return postJson(`/users/${user.id}/send-invite`, {
+    email: user.email,
+    name: user.name,
+  });
+}
+
+export function sendUserPasswordReset(user: LoginEmailUser): Promise<{ ok: boolean }> {
+  return postJson(`/users/${user.id}/send-password-reset`, {
+    email: user.email,
+    name: user.name,
+  });
 }
